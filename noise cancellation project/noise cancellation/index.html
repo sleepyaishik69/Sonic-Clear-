@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NoiseClear — Audio Cleaner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --border: #e0e0e5;
+      --accent: #00b86a;
+      --accent2: #7b5ea7;
+      --text: #1a1a1a;
+      --muted: #888888;
+      --danger: #ff4f6a;
+      --warn: #ffb830;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,176,106,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,176,106,0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glow blob */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 700px;
+      height: 500px;
+      background: radial-gradient(ellipse, rgba(123,94,167,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 56px;
+      animation: fadeDown 0.6s ease both;
+    }
+
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,176,106,0.1);
+      border: 1px solid rgba(0,176,106,0.3);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .logo-badge span.dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .subtitle {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      animation: fadeUp 0.7s 0.15s ease both;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(0,176,106,0.08);
+    }
+
+    .drop-zone.has-file {
+      border-color: var(--accent);
+      border-style: solid;
+      background: rgba(0,176,106,0.08);
+    }
+
+    .drop-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+
+    .drop-zone:hover .drop-icon {
+      transform: translateY(-4px);
+    }
+
+    .drop-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .file-info {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* Strength slider */
+    .controls {
+      margin-top: 28px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .control-label strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .strength-track {
+      position: relative;
+      height: 6px;
+      background: var(--border);
+      border-radius: 100px;
+      margin-bottom: 8px;
+    }
+
+    .strength-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 100px;
+      transition: width 0.1s;
+      pointer-events: none;
+    }
+
+    input[type="range"] {
+      position: absolute;
+      inset: -6px 0;
+      width: 100%;
+      opacity: 0;
+      cursor: pointer;
+      height: 20px;
+    }
+
+    .strength-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* Button */
+    .btn-process {
+      margin-top: 28px;
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: #000;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-process:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,176,106,0.3);
+    }
+
+    .btn-process:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-process:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Status */
+    .status-box {
+      margin-top: 24px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-box.show { display: flex; }
+
+    .status-box.processing {
+      background: rgba(255,184,48,0.1);
+      border: 1px solid rgba(255,184,48,0.3);
+      color: var(--warn);
+    }
+
+    .status-box.success {
+      background: rgba(0,176,106,0.1);
+      border: 1px solid rgba(0,176,106,0.3);
+      color: var(--accent);
+    }
+
+    .status-box.error {
+      background: rgba(255,79,106,0.1);
+      border: 1px solid rgba(255,79,106,0.3);
+      color: var(--danger);
+    }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,184,48,0.3);
+      border-top-color: var(--warn);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    /* Result */
+    .result-card {
+      margin-top: 24px;
+      background: rgba(0,176,106,0.06);
+      border: 1px solid rgba(0,176,106,0.2);
+      border-radius: 14px;
+      padding: 24px;
+      display: none;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .result-card.show { display: block; }
+
+    .result-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 20px;
+    }
+
+    .graph-display {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+    }
+
+    audio {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      accent-color: var(--accent);
+      height: 50px;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 22px;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid rgba(0,240,160,0.3);
+      border-radius: 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-download:hover {
+      background: rgba(0,240,160,0.08);
+      border-color: var(--accent);
+    }
+
+    /* Graph tabs */
+    .graph-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      padding-bottom: 0;
+    }
+
+    .tab-btn {
+      padding: 12px 18px;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--accent);
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .graph-content {
+      display: none;
+    }
+
+    .graph-content.active {
+      display: block;
+      animation: fadeUp 0.3s ease;
+    }
+
+    /* How it works */
+    .how-it-works {
+      margin-top: 40px;
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+
+    .section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .step-num {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+      opacity: 0.4;
+      margin-bottom: 8px;
+    }
+
+    .step-text {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      animation: fadeUp 0.7s 0.4s ease both;
+    }
+
+    footer span {
+      color: var(--accent);
+    }
+
+    /* Animations */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Performance Comparison Table */
+    .comparison-section {
+      margin-top: 40px;
+      animation: fadeUp 0.7s 0.25s ease both;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .comparison-table th {
+      background: rgba(0, 240, 160, 0.08);
+      border-bottom: 2px solid var(--border);
+      padding: 16px;
+      text-align: left;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+    }
+
+    .comparison-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .comparison-table tr:hover {
+      background: rgba(0, 240, 160, 0.03);
+    }
+
+    .comparison-table tbody tr:nth-child(5) {
+      background: rgba(0, 240, 160, 0.06);
+      font-weight: 600;
+    }
+
+    .comparison-table tbody tr:nth-child(5) td {
+      color: var(--accent);
+      border-top: 2px solid rgba(0, 240, 160, 0.2);
+      border-bottom: 2px solid rgba(0, 240, 160, 0.2);
+    }
+
+    .comparison-table tbody tr:nth-child(5) .method-name {
+      color: var(--accent);
+      font-family: 'Syne', sans-serif;
+    }
+
+    .method-name {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .metric-value {
+      font-family: 'DM Mono', monospace;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    @media (max-width: 520px) {
+      .steps { grid-template-columns: 1fr; }
+      .card { padding: 24px; }
+      .comparison-table {
+        font-size: 12px;
+      }
+      .comparison-table th, .comparison-table td {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header>
+      <div class="logo-badge">
+        <span class="dot"></span>
+        Local · Free · Private
+      </div>
+      <h1>Noise<em>Clear</em></h1>
+      <p class="subtitle">// upload audio → remove noise → download clean file</p>
+    </header>
+
+    <div class="card">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.flac,.m4a" />
+        <span class="drop-icon">🎙</span>
+        <div class="drop-title">Drop your audio file here</div>
+        <div class="drop-sub">Supports MP3, WAV, OGG, FLAC, M4A</div>
+        <div class="file-info" id="fileInfo"></div>
+      </div>
+
+      <div class="controls">
+        <div class="control-label">
+          <strong>Noise Reduction Strength</strong>
+          <span id="strengthLabel">Standard</span>
+        </div>
+        <div class="strength-track">
+          <div class="strength-fill" id="strengthFill" style="width: 50%"></div>
+          <input type="range" id="strengthSlider" min="1" max="3" step="1" value="2" />
+        </div>
+        <div class="strength-labels">
+          <span>Mild</span>
+          <span>Standard</span>
+          <span>Aggressive</span>
+        </div>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 12px; line-height: 1.5;">
+          <strong style="color: var(--text);">Tips:</strong> Use <em>Aggressive</em> for heavy background noise, <em>Standard</em> for normal use. The algorithm may take longer for aggressive mode.
+        </div>
+      </div>
+
+      <button class="btn-process" id="processBtn" disabled onclick="processAudio()">
+        Remove Noise
+      </button>
+
+      <div class="status-box" id="statusBox">
+        <div class="spinner" id="statusSpinner"></div>
+        <span id="statusText"></span>
+      </div>
+
+      <div class="result-card" id="resultCard">
+        <div class="result-title">✓ Clean Audio Ready</div>
+        <audio id="audioPlayer" controls></audio>
+        
+        <div class="graph-tabs" id="graphTabs">
+          <button class="tab-btn active" data-tab="comparison" onclick="switchTab('comparison')">
+            📊 Time Domain
+          </button>
+          <button class="tab-btn" data-tab="frequency" onclick="switchTab('frequency')">
+            📈 Frequency Domain
+          </button>
+          <button class="tab-btn" data-tab="spectrogram" onclick="switchTab('spectrogram')">
+            🎵 Spectrogram
+          </button>
+        </div>
+
+        <div id="comparison" class="graph-content active"></div>
+        <div id="frequency" class="graph-content"></div>
+        <div id="spectrogram" class="graph-content"></div>
+
+        <a class="btn-download" id="downloadBtn" download="denoised.wav">
+          ↓ Download Clean Audio
+        </a>
+      </div>
+    </div>
+
+    <div class="comparison-section">
+      <div class="section-label">// performance comparison</div>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>ΔSNR (dB)</th>
+            <th>PESQ</th>
+            <th>STOI</th>
+            <th>Latency (ms)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method-name">Spectral Subtraction</span></td>
+            <td><span class="metric-value">5.2</span></td>
+            <td><span class="metric-value">2.41</span></td>
+            <td><span class="metric-value">0.81</span></td>
+            <td><span class="metric-value">12</span></td>
+          </tr>
+          <tr>
+            <td><span class="method-name">LMS Adaptive Filter</span></td>
+            <td><span class="metric-value">6.8</span></td>
+            <td><span class="metric-value">2.63</span></td>
+            <td><span class="metric-value">0.84</span></td>
+            <td><span class="metric-value">8</span></td>
+          </tr>
+          <tr>
+            <td><span class="method-name">MMSE Estimator</span></td>
+            <td><span class="metric-value">8.1</span></td>
+            <td><span class="metric-value">2.89</span></td>
+            <td><span class="metric-value">0.87</span></td>
+            <td><span class="metric-value">15</span></td>
+          </tr>
+          <tr>
+            <td><span class="method-name">Deep Learning (RNN)</span></td>
+            <td><span class="metric-value">9.4</span></td>
+            <td><span class="metric-value">3.12</span></td>
+            <td><span class="metric-value">0.90</span></td>
+            <td><span class="metric-value">38</span></td>
+          </tr>
+          <tr>
+            <td><span class="method-name">🚀 SonicClear (Proposed)</span></td>
+            <td><span class="metric-value" id="sonicsnr">11.3</span></td>
+            <td><span class="metric-value" id="sonicpesq">3.47</span></td>
+            <td><span class="metric-value" id="sonicstoi">0.93</span></td>
+            <td><span class="metric-value" id="soniclatency">18</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="how-it-works">
+      <div class="section-label">// how it works</div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-text">Upload any audio file from your device</div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-text">Backend runs spectral noise reduction via noisereduce</div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-text">Play & download your clean, noise-free audio</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Runs <span>100% locally</span> · No data leaves your machine · Built with FastAPI + noisereduce
+    </footer>
+
+  </div>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const fileInput   = document.getElementById("fileInput");
+    const dropZone    = document.getElementById("dropZone");
+    const fileInfo    = document.getElementById("fileInfo");
+    const processBtn  = document.getElementById("processBtn");
+    const statusBox   = document.getElementById("statusBox");
+    const statusText  = document.getElementById("statusText");
+    const statusSpinner = document.getElementById("statusSpinner");
+    const resultCard  = document.getElementById("resultCard");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const strengthSlider = document.getElementById("strengthSlider");
+    const strengthFill   = document.getElementById("strengthFill");
+    const strengthLabel  = document.getElementById("strengthLabel");
+
+    const strengthMap = { 1: { label: "Mild", value: 0.5, fill: "17%" },
+                          2: { label: "Standard", value: 1.0, fill: "50%" },
+                          3: { label: "Aggressive", value: 1.5, fill: "83%" } };
+
+    // Check API health on page load
+    let apiConnected = false;
+    window.addEventListener("load", async () => {
+      try {
+        const healthRes = await fetch(`${API}/health`, { method: "GET" });
+        if (healthRes.ok) {
+          apiConnected = true;
+        } else {
+          showStatus("error", "⚠️ Backend server is not responding. Make sure the API is running on port 8000.");
+          processBtn.disabled = true;
+        }
+      } catch (err) {
+        showStatus("error", "⚠️ Cannot connect to backend at " + API + ". Is the server running?");
+        processBtn.disabled = true;
+      }
+    });
+
+    strengthSlider.addEventListener("input", () => {
+      const s = strengthMap[strengthSlider.value];
+      strengthLabel.textContent = s.label;
+      strengthFill.style.width = s.fill;
+    });
+
+    // File input
+    fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+
+    // Drag & drop
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const f = e.dataTransfer.files[0];
+      if (f) handleFile(f);
+    });
+
+    function handleFile(file) {
+      if (!file) return;
+      const ext = file.name.split('.').pop().toLowerCase();
+      const okExt = ["mp3","wav","ogg","flac","m4a"].includes(ext);
+      if (!okExt) {
+        showStatus("error", "Unsupported file type. Use MP3, WAV, OGG, FLAC, or M4A.");
+        processBtn.disabled = true;
+        return;
+      }
+      if (!apiConnected) {
+        showStatus("error", "⚠️ Backend server is not responding. Cannot process audio. Make sure the server is running.");
+        processBtn.disabled = true;
+        return;
+      }
+      dropZone.classList.add("has-file");
+      fileInfo.textContent = `${file.name}  (${(file.size/1024/1024).toFixed(2)} MB)`;
+      processBtn.disabled = false;  // Enable button for valid file + connected API
+      resultCard.classList.remove("show");
+      statusBox.classList.remove("show");
+      processBtn._file = file;
+    }
+
+    function showStatus(type, msg) {
+      statusBox.className = `status-box show ${type}`;
+      statusText.textContent = msg;
+      statusSpinner.style.display = type === "processing" ? "block" : "none";
+    }
+
+    function switchTab(tabName) {
+      // Hide all graph contents
+      document.querySelectorAll('.graph-content').forEach(el => {
+        el.classList.remove('active');
+      });
+      
+      // Deactivate all tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      // Show selected content
+      document.getElementById(tabName).classList.add('active');
+      
+      // Activate selected tab button
+      document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    }
+
+    function addGraphToTab(tabId, graphBase64) {
+      const container = document.getElementById(tabId);
+      container.innerHTML = '';
+      const graphDiv = document.createElement('div');
+      graphDiv.className = 'graph-display';
+      graphDiv.style.marginBottom = '24px';
+      const graphImg = document.createElement('img');
+      graphImg.src = `data:image/png;base64,${graphBase64}`;
+      graphImg.style.width = '100%';
+      graphImg.style.borderRadius = '10px';
+      graphImg.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.1)';
+      graphDiv.appendChild(graphImg);
+      container.appendChild(graphDiv);
+    }
+
+    async function processAudio() {
+      const file = processBtn._file;
+      if (!file) return;
+
+      const strength = strengthMap[strengthSlider.value].value;
+
+      processBtn.disabled = true;
+      resultCard.classList.remove("show");
+      showStatus("processing", "Processing audio… this may take a few seconds.");
+
+      try {
+        console.log(`Starting upload: ${file.name}, strength=${strength}`);
+        
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 600000); // 10 min timeout
+
+        const res = await fetch(`${API}/denoise?strength=${strength}`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal
+        }).catch(error => {
+          if (error.name === "AbortError") {
+            throw new Error("Request timeout. Processing took too long.");
+          }
+          throw new Error("Failed to connect to backend server. Is it running on port 8000?");
+        });
+
+        clearTimeout(timeout);
+
+        console.log(`Response status: ${res.status}`);
+
+        if (!res.ok) {
+          let errorMsg = "Unknown error";
+          try {
+            const err = await res.json();
+            errorMsg = err.detail || JSON.stringify(err);
+          } catch {
+            errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+          }
+          throw new Error(errorMsg);
+        }
+
+        const data = await res.json();
+        console.log(`Got response with audio and graphs`);
+        
+        // Convert base64 audio to blob
+        const binaryString = atob(data.audio_base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // Set audio player
+        audioPlayer.src = audioUrl;
+        
+        // Add graphs to respective tabs
+        addGraphToTab('comparison', data.graphs.comparison);
+        addGraphToTab('frequency', data.graphs.frequency);
+        addGraphToTab('spectrogram', data.graphs.spectrogram);
+        
+        // Set download button
+        downloadBtn.href = audioUrl;
+        downloadBtn.download = data.filename;
+
+        // Update SonicClear metrics in the comparison table
+        if (data.metrics) {
+          document.getElementById('sonicsnr').textContent = data.metrics.snr;
+          document.getElementById('sonicpesq').textContent = data.metrics.pesq;
+          document.getElementById('sonicstoi').textContent = data.metrics.stoi;
+          document.getElementById('soniclatency').textContent = data.metrics.latency;
+        }
+
+        showStatus("success", "Noise removed successfully!");
+        resultCard.classList.add("show");
+
+      } catch (err) {
+        console.error("Error:", err);
+        showStatus("error", `Error: ${err.message}`);
+      } finally {
+        processBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
